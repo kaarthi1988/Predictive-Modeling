@@ -1,0 +1,272 @@
+---
+title: "LC_data_Cleanedforstage2"
+author: "Prasanna Kaarthi Dhanabalan"
+date: "2023-11-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+
+LC_data_Cleanedstage2 <- read.csv("D:/UNCG - Prep for IA/Analytics/Predictive Analytics/R/Group Project/project/LC_data_CleanedforStage2.csv")
+```
+
+
+```{r}
+head(LC_data_Cleanedstage2)
+dim(LC_data_Cleanedstage2)
+
+```
+
+
+```{r}
+# to identify null values in the data frame
+
+na_counts <- colSums(is.na(LC_data_Cleanedstage2))
+(sum(na_counts)/dim(LC_data_Cleanedstage2)[1])*100
+sum(na_counts)
+dim(LC_data_Cleanedstage2)
+
+# Maximum 0.18 % rows are having null values in the data frame.
+```
+
+
+```{r}
+# remove rows which are having at least one null value.
+
+LC_data_Cleanedstage3 <- na.omit(LC_data_Cleanedstage2)
+dim(LC_data_Cleanedstage3)
+
+```
+```{r}
+na_counts <- colSums(is.na(LC_data_Cleanedstage3))
+na_counts
+```
+
+
+```{r}
+#ordinal unique values overview
+
+LC_data_ordinal <- LC_data_Cleanedstage3 %>%
+                   group_by(LC_data_Cleanedstage3$grade) %>%
+                  summarise(count = n())
+  
+
+
+LC_data_ordinal_2 <- LC_data_Cleanedstage3 %>%
+                   group_by(LC_data_Cleanedstage3$emp_length) %>%
+                  summarise(count = n())
+LC_data_ordinal
+LC_data_ordinal_2
+NUll_values_percentage = (145162/sum(LC_data_ordinal_2$count))*100
+NUll_values_percentage
+```
+
+```{r}
+
+#ordinal grade value conversion Grade A being the safest grade and G being the Riskiest one
+
+LC_data_Cleanedstage3$grade_convert <- factor(LC_data_Cleanedstage3$grade, 
+                                               levels = c("A","B","C","D","E","F","G"))
+
+LC_data_Cleanedstage3$grade_convert <- as.numeric(LC_data_Cleanedstage3$grade_convert)
+
+```
+
+```{r}
+exp <- ifelse(LC_data_Cleanedstage3$emp_length == "",
+               "< 1 year",LC_data_Cleanedstage3$emp_length)
+
+# exp <- exp %>%
+ #      group_by(exp) %>%
+  #     summarise(count = n())
+
+print(table(exp))
+```
+
+```{r}
+#ordinal employment length conversion
+
+#exp <- factor(LC_data_Cleanedstage3$emp_length)
+level_map <- c("< 1 year" = 0 , "1 year" =  1, "2 years" = 2,"3 years" = 3,
+               "4 years" = 4, "5 years" = 5 , "6 years" = 6, "7 years" = 7,
+               "8 years" = 8, "9 years" = 9, "10+ years" = 10)
+values <- level_map[exp]
+
+head(values,100)
+
+```
+```{r}
+
+# Ordinal emp_length conversion 
+
+# replace null values to < 1 year
+
+LC_data_Cleanedstage3$emp_length_conv <- ifelse(LC_data_Cleanedstage3$emp_length == "",
+                                          "< 1 year",LC_data_Cleanedstage3$emp_length)
+#map ordinal levels
+
+level_map <- c("< 1 year" = 0 , "1 year" =  1, "2 years" = 2,"3 years" = 3,
+               "4 years" = 4, "5 years" = 5 , "6 years" = 6, "7 years" = 7,
+               "8 years" = 8, "9 years" = 9, "10+ years" = 10)
+
+LC_data_Cleanedstage3$emp_length_conv <- level_map[LC_data_Cleanedstage3$emp_length_conv]
+
+```
+
+
+```{r}
+# Nominal value term conversion using dummies.
+
+LC_data_nominal_term <- LC_data_Cleanedstage3 %>%
+                   group_by(LC_data_Cleanedstage3$term) %>%
+                  summarise(count = n())
+LC_data_nominal_term
+
+term_dummy <- model.matrix(~ LC_data_Cleanedstage3$term - 1, 
+                           data = LC_data_Cleanedstage3 )
+col_names <- c("36_months","60_months")
+colnames(term_dummy) <- col_names
+LC_data_Cleanedstage3 <- cbind(LC_data_Cleanedstage3,term_dummy)
+head(term_dummy)
+```
+
+
+```{r}
+#Nominal home_ownership conversion to dummies
+
+LC_data_nominal_own <- LC_data_Cleanedstage3 %>%
+                   group_by(LC_data_Cleanedstage3$home_ownership) %>%
+                  summarise(count = n())
+LC_data_nominal_own
+
+homeown_dummy <- model.matrix(~LC_data_Cleanedstage3$home_ownership - 1,
+                              data = LC_data_Cleanedstage3)
+col_names_own <- c("home_ownership_ANY","home_ownership_MORTGAGE","home_ownership_NONE",
+                   "home_ownership_OTHER","home_ownership_OWN","home_ownership_RENT")
+colnames(homeown_dummy) <- col_names_own
+LC_data_Cleanedstage3 <- cbind(LC_data_Cleanedstage3,homeown_dummy)
+head(homeown_dummy)
+
+```
+
+
+```{r}
+#Nominal purpose conversion to dummies
+
+LC_data_nominal_pur <- LC_data_Cleanedstage3 %>%
+                       group_by(LC_data_Cleanedstage3$purpose) %>%
+                       summarise(count = n())
+LC_data_nominal_pur
+
+purpose_dummy <- model.matrix(~LC_data_Cleanedstage3$purpose - 1,
+                              data = LC_data_Cleanedstage3)
+col_names_pur <- c("purpose_car","purpose_credit_card","purpose_debt_consolidation",
+                   "purpose_educational","purpose_home_improvement","purpose_house",
+                   "purpose_major_purchase","purpose_medical","purpose_moving",
+                   "purpose_other","purpose_renewable_energy","purpose_small_business",
+                   "purpose_vacation","purpose_wedding")
+colnames(purpose_dummy) <- col_names_pur
+LC_data_Cleanedstage3 <- cbind(LC_data_Cleanedstage3,purpose_dummy)
+head(purpose_dummy)
+
+```
+
+
+```{r}
+library(ggplot2)
+
+fico_high <- ggplot(LC_data_Cleanedstage3) +
+            geom_histogram(aes(x = LC_data_Cleanedstage3$fico_range_high))+
+            geom_histogram(aes(x = LC_data_Cleanedstage3$fico_range_low))
+
+fico_high
+```
+
+```{r}
+# fico variable conversion  
+LC_data_Cleanedstage3$fico_avg <- (LC_data_Cleanedstage3$fico_range_low+LC_data_Cleanedstage3$fico_range_high)/2
+```
+
+
+```{r}
+
+#dependent variable  
+
+# unique counts for dependent variable 
+LC_data_dependant <- LC_data_Cleanedstage3 %>%
+                       group_by(LC_data_Cleanedstage3$loan_status) %>%
+                       summarise(count = n())
+
+LC_data_dependant
+
+# filter only 2 levels
+LC_data_Cleanedstage4 <- LC_data_Cleanedstage3 %>%
+                         filter(LC_data_Cleanedstage3$loan_status == "Charged Off" |
+                                LC_data_Cleanedstage3$loan_status == "Fully Paid" )
+
+head(LC_data_Cleanedstage4)
+
+## unique counts for dependent variable
+
+LC_data_dependant_fin <- LC_data_Cleanedstage4 %>%
+                       group_by(LC_data_Cleanedstage4$loan_status) %>%
+                       summarise(count = n())
+LC_data_dependant_fin
+
+level_map_independent <- c("Charged Off" = 0 , "Fully Paid" = 1)
+
+LC_data_Cleanedstage4$loan_status_conv <- level_map_independent[LC_data_Cleanedstage4$loan_status]
+```
+
+
+```{r}
+head(LC_data_Cleanedstage3)
+```
+
+```{r}
+head(LC_data_Cleanedstage4)
+dim(LC_data_Cleanedstage4)
+```
+
+```{r}
+#Final clean up
+
+LC_data_Cleanedstage5 <- LC_data_Cleanedstage4 %>%
+                        select(-term,-grade,-emp_length,-home_ownership,-loan_status,
+                               -purpose,-fico_range_low,-fico_range_high)
+
+head(LC_data_Cleanedstage5)
+```
+
+```{r}
+file_path <- "D:/UNCG - Prep for IA/Analytics/Predictive Analytics/R/Group Project/project/LC_data_CleanedforStage5.csv"
+
+write.csv(LC_data_Cleanedstage5, file = file_path, row.names = FALSE)
+```
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

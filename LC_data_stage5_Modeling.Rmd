@@ -1,0 +1,343 @@
+---
+title: "LC_data_stage5_Modeling"
+author: "Prasanna Kaarthi Dhanabalan"
+date: "2023-11-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+
+LC_data_stage5_model <- read.csv("D:/UNCG - Prep for IA/Analytics/Predictive Analytics/R/Group Project/project/LC_data_CleanedforStage5.csv")
+
+head(LC_data_stage5_model)
+summary(LC_data_stage5_model)
+```
+```{r}
+library(ggplot2)
+
+plot <- ggplot(LC_data_stage5_model,aes(x=loan_amnt)) +
+        geom_histogram()
+print(plot)
+
+plot3 <- ggplot(LC_data_stage5_model,aes(x=annual_inc)) +
+        geom_histogram()
+print(plot3)
+
+plot2 <- ggplot(data = LC_data_stage5_model, mapping = aes(x = grade_convert, y = annual_inc)) +
+   geom_boxplot()
+
+
+LC_data_stage5_model_anninc <- LC_data_stage5_model %>%
+                               filter(LC_data_stage5_model$annual_inc < 150000)
+
+plot4 <- ggplot(LC_data_stage5_model_anninc,aes(x=annual_inc)) +
+        geom_histogram()
+print(plot4)
+```
+
+
+```{r}
+loan_status_pie <- table(ifelse(LC_data_stage5_model$loan_status_conv == 1, "Fully Paid","Charged off"))
+status_percent <- round(100 * loan_status_pie / sum(loan_status_pie), 1)
+plt_pie <- pie(loan_status_pie, labels = paste(names(loan_status_pie),status_percent, "%"), main = "Loan_Staus(Dependent variable) After Cleaning")
+
+print(plt_pie)
+
+```
+```{r}
+library(ggplot2)
+
+ggplot(LC_data_stage5_model, aes(x = factor(loan_status_conv))) +
+  geom_bar(fill = "skyblue") +
+  labs(title = "Dependent variable Levels After Cleaning") +
+  geom_text(
+    stat = "count", 
+    aes(label = stat(count)),
+    vjust = -0.5,
+    show.legend = FALSE
+  )
+
+```
+
+
+
+```{r}
+#loan status correlation with all variables
+
+correlation <- cor(LC_data_stage5_model)
+
+correlation['loan_status_conv', ]
+```
+
+
+
+```{r}
+#Model1: Logistic Regression
+
+install.packages("rsample")
+library(rsample)
+
+set.seed(123)
+
+# spliting the data
+LC_data_split <- initial_split(LC_data_stage5_model,0.7)
+LC_data_train <- training(LC_data_split)
+LC_data_test <- testing(LC_data_split)
+#logistic regression
+loan_prediction <-  glm(loan_status_conv ~ .-id, data = LC_data_train,family = "binomial")
+summary(loan_prediction)
+#testing the data
+LC_data_test <- LC_data_test %>%
+                mutate(predicted_loan_prediction_prob = predict(loan_prediction, 
+                                      newdata = LC_data_test, type = "response")) %>% 
+  mutate(predicted_loan_prediction = if_else(predicted_loan_prediction_prob>0.5, 1, 0))
+
+LC_data_test
+
+
+```
+
+
+
+
+```{r}
+install.packages("rsample")
+library(rsample)
+
+LC_data_stage5_model_test <- LC_data_stage5_model
+
+set.seed(1234)
+
+# spliting the data
+
+LC_data_split_t1 <- initial_split(LC_data_stage5_model_test,prop = 0.7)
+LC_data_train_t1 <- training(LC_data_split_t1)
+LC_data_test_t1 <- testing(LC_data_split_t1)
+
+#logistic regression
+
+loan_prediction_t1 <-  glm(loan_status_conv ~ .-id, 
+                        data = LC_data_train_t1,                         
+                        family = "binomial")
+summary(loan_prediction_t1)
+
+#testing the data
+
+LC_data_test_t1 <- LC_data_test_t1 %>%
+                mutate(predicted_loan_prediction_prob = predict(loan_prediction_t1, newdata = LC_data_test_t1, type = "response")) %>% 
+  mutate(predicted_loan_prediction = if_else(predicted_loan_prediction_prob>0.5, 1, 0))
+
+LC_data_test_t1
+
+table(LC_data_test_t1$predicted_loan_prediction,LC_data_test_t1$loan_status_conv)
+install.packages("caret")
+library(caret)
+confusionMatrix(as.factor(LC_data_test_t1$predicted_loan_prediction), as.factor(LC_data_test_t1$loan_status_conv), positive = "1")
+```
+
+
+```{r}
+# evalution
+
+table(LC_data_test$predicted_loan_prediction,LC_data_test$loan_status_conv)
+
+install.packages("caret")
+library(caret)
+
+confusionMatrix(as.factor(LC_data_test$predicted_loan_prediction), as.factor(LC_data_test$loan_status_conv), positive = "1")
+```
+
+
+
+
+```{r}
+# xgboost modeling
+
+install.packages("xgboost")
+library(xgboost)
+
+
+LC_data_stage5_model_test1 <- LC_data_stage5_model %>%
+                            select(-id)
+
+
+LC_data_split_t2 <- initial_split(LC_data_stage5_model_test1,prop = 0.7)
+LC_data_train_t2 <- training(LC_data_split_t2)
+LC_data_test_t2 <- testing(LC_data_split_t2)
+
+# Convert data to matrix format
+dtrain <- xgb.DMatrix(as.matrix(LC_data_train_t2[, -which(names(LC_data_train_t2) == "loan_status_conv")]), label = LC_data_train_t2$loan_status_conv)
+dtest <- xgb.DMatrix(as.matrix(LC_data_test_t2[, -which(names(LC_data_test_t2) == "loan_status_conv")]), label = LC_data_test_t2$loan_status_conv)
+
+# Set up XGBoost parameters
+params <- list(
+  booster = "gbtree",
+  objective = "binary:logistic", # for binary classification
+  eval_metric = "logloss", # evaluation metric
+  eta = 0.1, # learning rate
+  max_depth = 6, # maximum depth of a tree
+  subsample = 0.8, # subsample ratio of the training instances
+  colsample_bytree = 0.8 # subsample ratio of columns when constructing each tree
+)
+# Train the XGBoost model
+xgb_model <- xgboost(params = params, data = dtrain, nrounds = 200, verbose = 0)
+
+# Make predictions on the test set
+predictions <- predict(xgb_model, dtest)
+
+# Evaluate model performance
+conf_matrix <- confusionMatrix(data = factor(ifelse(predictions > 0.5, 1, 0)), reference = factor(LC_data_test_t2$loan_status_conv))
+print(conf_matrix)
+
+```
+
+
+
+```{r}
+
+ # Oversampling method
+
+# Load the ROSE package
+install.packages("ROSE")
+library(ROSE)
+
+# Oversample the minority class
+oversampled_data <- ROSE(loan_status_conv ~ ., data = LC_data_stage5_model_test1,
+                         seed = 12345)$data
+table(oversampled_data$loan_status_conv)
+# Now, split your data into train and test sets
+# Split oversampled data into training and testing (for example, 70% training, 30% testing)
+set.seed(12356)
+
+LC_data_split_t3 <- initial_split(oversampled_data, prop = 0.7)
+LC_data_train_t3 <- training(LC_data_split_t3)
+LC_data_test_t3 <- testing(LC_data_split_t3)
+
+
+
+#logistic regression
+
+loan_prediction_t3 <-  glm(loan_status_conv ~ ., 
+                        data = LC_data_train_t3,                         
+                        family = "binomial")
+summary(loan_prediction_t3)
+
+#testing the data
+
+LC_data_test_t3 <- LC_data_test_t3 %>%
+                mutate(predicted_loan_prediction_prob = predict(loan_prediction_t3, newdata = LC_data_test_t3, type = "response")) %>% 
+  mutate(predicted_loan_prediction = if_else(predicted_loan_prediction_prob>0.5, 1, 0))
+
+LC_data_test_t3
+
+table(LC_data_test_t3$predicted_loan_prediction,LC_data_test_t3$loan_status_conv)
+
+confusionMatrix(as.factor(LC_data_test_t3$predicted_loan_prediction), as.factor(LC_data_test_t3$loan_status_conv), positive = "1")
+
+
+```
+
+```{r}
+#decision tree Modeling
+
+library(rpart)
+library(rpart.plot)
+
+loan_prediction_dtree <- rpart(loan_status_conv ~ .-id,
+                          data = LC_data_stage5_model, method = "class")
+rpart.plot(loan_prediction_dtree)
+```
+
+
+
+
+
+```{r}
+loan_prediction_dtree_train <- rpart(loan_status_conv ~ .-id,
+                          data = LC_data_train, method = "class")
+rpart.plot(loan_prediction_dtree_train)
+
+
+
+loan_prediction_dtree_prob <- loan_prediction_dtree_train %>% 
+  predict(newdata = LC_data_test, type = "prob")
+
+head(loan_prediction_dtree_prob)
+
+loan_prediction_dtree_class <- loan_prediction_dtree_train %>% 
+  predict(newdata =LC_data_test, type = "class")
+
+head(loan_prediction_dtree_class)
+
+table(loan_prediction_dtree_class)
+
+LC_data_test <- LC_data_test %>% 
+  mutate(predicted_prob_DT = loan_prediction_dtree_prob[,2]) %>% 
+  mutate(predicted_class_DT = loan_prediction_dtree_class)
+
+
+head(LC_data_test)
+
+#Part3
+confusionMatrix(as.factor(LC_data_test$predicted_class_DT), as.factor(LC_data_test$loan_status_conv), positive = "1")
+```
+
+
+
+```{r}
+library(pROC)
+
+roc_regression <- roc(LC_data_test$loan_status_conv,LC_data_test$predicted_loan_prediction_prob)
+roc_xgboost <- roc(LC_data_test_t2$loan_status_conv,predictions)
+roc_oversample <- roc(LC_data_test_t3$loan_status_conv,LC_data_test_t3$predicted_loan_prediction_prob)
+roc_dtree <- roc(LC_data_test$loan_status_conv,LC_data_test$predicted_prob_DT)
+
+plot(roc_regression, col = "blue")
+plot(roc_xgboost, col = "red",add = TRUE)
+plot(roc_oversample, col = "green",add = TRUE)
+plot(roc_dtree, col = "black",add = TRUE)
+
+legend("bottomright", legend=c("Logistic Regressoin", "Xgboost","Oversample","Decision Tree"), col=c("blue", "red","green","black"))
+```
+
+
+```{r}
+#library(randomForest)
+
+#loan_prediction_rf <- randomForest(loan_status_conv ~ .-id, data = LC_data_train, ntree = 50, importance = TRUE)
+
+# Summary of the model
+#print(loan_prediction_rf)
+
+# Variable Importance
+#varImpPlot(loan_prediction_rf)
+
+```
+
+
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
